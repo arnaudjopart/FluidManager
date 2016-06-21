@@ -173,7 +173,7 @@ public class FluidPropagation : MonoBehaviour {
                 Cube cubeScript = cube.GetComponent<Cube>();
                 cubeScript.m_meshRenderer.material = m_materialList[ randomValue ];
                 cubeScript.OriginalMaterial = m_materialList[ randomValue ];
-                cubeScript.Weight = randomValue;
+                cubeScript.Cost = randomValue+1;
                 cube.transform.SetParent( m_transform, false );
                 m_listOfCubes.Add(index, cube);
             }
@@ -232,7 +232,7 @@ public class FluidPropagation : MonoBehaviour {
             }
             m_listOfIndexToFlood.RemoveAt( 0 );
             m_listOfIndexAlreadyFlooded.Add( currentIndex );
-            GetNeighBours( currentIndex );
+            GetNeighBoursInBreathFirstPathFinding( currentIndex );
 
             m_listOfIndexToFlood.Sort(SortByWeight);
 
@@ -283,7 +283,7 @@ public class FluidPropagation : MonoBehaviour {
             }
             m_listOfIndexToFlood.RemoveAt( 0 );
             m_listOfIndexAlreadyFlooded.Add( currentIndex );
-            GetNeighBours( currentIndex );
+            GetNeighBoursInBreathFirstPathFinding( currentIndex );
 
             m_listOfIndexToFlood.Sort();
 
@@ -299,7 +299,7 @@ public class FluidPropagation : MonoBehaviour {
     /// This methods add the available neighbors of an index to the m_listOfIndexToFlood list
     /// </summary>
     /// <param name="_index"></param>
-    private void GetNeighBours(int _index)
+    private void GetNeighBoursInBreathFirstPathFinding(int _index)
     {
         List<int> neigborsIndexList = GenerateNeighbors(_index);
         int origin = _index;
@@ -321,6 +321,37 @@ public class FluidPropagation : MonoBehaviour {
                     nextCube.GetComponent<Cube>().SetOrigin(origin);
                 }
             }             
+        }
+    }
+
+    private void GetNeighBoursInDijkstraPathFinding(int _index)
+    {
+        GameObject currentCube = FindObjectInDictionary(_index, m_listOfCubes);
+        List<int> neigborsIndexList = GenerateNeighbors(_index);
+        int origin = _index;
+        int costSoFar = currentCube.GetComponent<Cube>().CostSoFar;
+        foreach (int index in neigborsIndexList)
+        {
+            bool isRock = m_map1D[index] == 2;
+
+            if (!isRock)
+            {
+                GameObject nextCube = FindObjectInDictionary(index, m_listOfCubes);
+                int newCostSoFar = costSoFar + nextCube.GetComponent<Cube>().Cost;
+
+                bool isAlreadyChecked = CheckIfIndexIsInList(index, m_listOfIndexAlreadyFlooded);
+                bool isAlreadyWaitingForCheck = CheckIfIndexIsInList(index, m_listOfIndexToFlood);
+                bool newCostIsBeter = newCostSoFar< nextCube.GetComponent<Cube>().CostSoFar;
+
+                if (!isAlreadyChecked || !isAlreadyWaitingForCheck)
+                {
+
+                    m_listOfIndexToFlood.Add(index);
+                    
+                    nextCube.GetComponent<MeshRenderer>().material = m_materialList[4];
+                    nextCube.GetComponent<Cube>().SetOrigin(origin);
+                }
+            }
         }
     }
     /// <summary>
@@ -423,6 +454,7 @@ public class FluidPropagation : MonoBehaviour {
             int indexOfOrigin = cube.GetComponent<Cube>().GetOrigin();
             m_PathSteps.Add( cube );
             cube = FindObjectInDictionary( indexOfOrigin, m_listOfCubes );
+            security++;
             if(security>1000)
             {
                 print( "security out" );
@@ -434,8 +466,11 @@ public class FluidPropagation : MonoBehaviour {
 
         DrawPath();
     }
-    private int SortByWeight(int a, int b)
+    private int SortByWeight(int _a, int _b)
     {
+        int a = FindObjectInDictionary(_a, m_listOfCubes).GetComponent<Cube>().CostSoFar;
+        int b = FindObjectInDictionary(_b, m_listOfCubes).GetComponent<Cube>().CostSoFar;
+
         return b - a;
     }
     private void DrawPath()

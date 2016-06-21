@@ -11,10 +11,16 @@ public class Cube : MonoBehaviour {
         get { return m_originalMaterial; }
         set { m_originalMaterial = value; }
     }
-    public int Weight
+    public int Cost
     {
-        get { return m_weight; }
-        set { m_weight = value; }
+        get { return m_cost; }
+        set { m_cost = value; }
+
+    }
+    public int CostSoFar
+    {
+        get { return m_costSoFar; }
+        set { m_costSoFar = value; }
     }
     [HideInInspector]
     public MeshRenderer m_meshRenderer;
@@ -55,7 +61,8 @@ public class Cube : MonoBehaviour {
 
     #region Private Members
 
-    private int m_weight; 
+    private int m_cost;
+    private int m_costSoFar = 0;
     private Material m_originalMaterial;
     private int m_origin;
 
