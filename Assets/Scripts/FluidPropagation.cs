@@ -28,8 +28,7 @@ public class FluidPropagation : MonoBehaviour {
 
     void Start()
     {
-        m_length = m_width * m_height;
-        m_map1D = new int[ m_length ];
+        
         CreateMap();        
     }
 
@@ -46,15 +45,20 @@ public class FluidPropagation : MonoBehaviour {
             {
                 string name = hit.collider.gameObject.name;
                 int number = int.Parse(name);
-                print(number);
+                //print(number);
                 m_listOfIndexToFlood.Add(number);
 
             }
+            
+
+        }
+        if( Input.GetMouseButtonDown( 1 ) )
+        {
+            CreateMap();
         }
         bool isAllowedToGoNextStep = Time.time > m_nextStepStartTimer+m_timeBetweenSteps;
         if( m_isFillingAuto && isAllowedToGoNextStep )
         {
-            print("Update");
             m_nextStepStartTimer = Time.time;
             UpdateMap();
         }
@@ -72,8 +76,25 @@ public class FluidPropagation : MonoBehaviour {
 
     #region Utils
 
+    private void ClearMap()
+    {
+        m_listOfIndexToFlood = new List<int>();
+        m_listOfIndexAlreadyFlooded = new List<int>();
+        m_listOfCubes = new Dictionary<int, GameObject>();
+
+        foreach(Transform obj in m_transform )
+        {
+            GameObject.Destroy( obj.gameObject );
+        }
+    }
+
     private void CreateMap()
     {
+        ClearMap();
+
+        m_length = m_width * m_height;
+        m_map1D = new int[ m_length ];
+
         for( int x = 0; x < m_width; x++ )
         {
             for( int y = 0; y < m_height; y++ )
@@ -84,6 +105,7 @@ public class FluidPropagation : MonoBehaviour {
                 m_map1D[ index ] = randomValue;
 
                 Vector3 positionOfCube = new Vector3(-m_width*.5f+x,m_height*.5f-y,0);
+
                 GameObject cube = Instantiate(m_cubePrefab, positionOfCube, Quaternion.identity) as GameObject;
                 cube.name = index.ToString();
                 cube.GetComponent<MeshRenderer>().material = m_materialList[ randomValue ];
@@ -100,25 +122,32 @@ public class FluidPropagation : MonoBehaviour {
         if (isFlooding)
         {
             int currentIndex = m_listOfIndexToFlood[0];
-            print("check "+currentIndex);
-            GetNeighBours(currentIndex);
-
+            //print("check "+currentIndex);
+            
             GameObject cube;
 
             if (m_listOfCubes.TryGetValue(currentIndex, out cube))
             {
                 cube.GetComponent<MeshRenderer>().material = m_materialList[1];
-            }
-            m_listOfIndexAlreadyFlooded.Add(currentIndex);
-            m_listOfIndexToFlood.RemoveAt(0);
-            print("next : " + m_listOfIndexToFlood[0]);
-
-            GameObject nextCube;
-
-            if (m_listOfCubes.TryGetValue(m_listOfIndexToFlood[0], out nextCube))
+                m_map1D[ currentIndex ] = 1;
+            }else
             {
-                nextCube.GetComponent<MeshRenderer>().material = m_materialList[3];
+                Debug.LogError( "No Cube found" );
             }
+            m_listOfIndexToFlood.RemoveAt( 0 );
+            m_listOfIndexAlreadyFlooded.Add( currentIndex );
+            GetNeighBours( currentIndex );
+
+
+            if( m_listOfIndexToFlood.Count > 0 )
+            {
+                GameObject nextCube;
+
+                if( m_listOfCubes.TryGetValue( m_listOfIndexToFlood[ 0 ], out nextCube ) )
+                {
+                    nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 3 ];
+                }
+            } 
 
         }
        
@@ -126,52 +155,101 @@ public class FluidPropagation : MonoBehaviour {
 
     private void GetNeighBours(int _index)
     {
-        int[] neigboursIndex = new int[4];
+        List<int> neigborsIndexList = GenerateNeighbors(_index);
 
-        int neighbourUp = _index - 1;
-        int neighbourRight = _index + m_height;
-        int neighbourDown = _index + 1;
-        int neighbourLeft = _index - m_height;
-
-        neigboursIndex[0] = neighbourUp;
-        neigboursIndex[1] = neighbourRight;
-        neigboursIndex[2] = neighbourDown;
-        neigboursIndex[3] = neighbourLeft;
-
-        foreach (int nb in neigboursIndex)
+        foreach (int index in neigborsIndexList )
         {
-            if (nb >= 0)
+            
+            bool isRock = m_map1D[ index ] ==2;
+
+            if( !isRock )
             {
-                bool isAlreadyFlooded = false;
+                //print( "test" );
+                bool isAlreadyFlooded = CheckIfIndexIsInList(index,m_listOfIndexAlreadyFlooded);
+                bool isAlreadyWaitingForCheck = CheckIfIndexIsInList(index,m_listOfIndexToFlood);
 
-                foreach ( int indexToCheck in m_listOfIndexAlreadyFlooded)
+                if( !isAlreadyFlooded && !isAlreadyWaitingForCheck )
                 {
-                    if (nb == indexToCheck)
+                    m_listOfIndexToFlood.Add( index );
+                    //print( "add " + index );
+                    GameObject nextCube;
+
+                    if( m_listOfCubes.TryGetValue( index, out nextCube ) )
                     {
-                        isAlreadyFlooded = true;
-                        break;
-                    }
-                    else
-                    {
-                        isAlreadyFlooded = false;
+                        nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 4 ];
                     }
                 }
+            }             
 
-                if (!isAlreadyFlooded)
-                {
-                    m_listOfIndexToFlood.Add(nb);
-                    print("add " + nb);
-                }
-
-            }
         }
     }
+
+    private bool CheckIfIndexIsInList(int _index, List<int> _list)
+    {
+        bool isInList=false;
+
+        foreach( int indexToCheck in _list )
+        {
+            if( _index == indexToCheck )
+            {
+                isInList = true;
+                break;
+            }
+            else
+            {
+                isInList = false;
+            }
+        }
+        return isInList;
+    }
+    private List<int> GenerateNeighbors(int _i)
+    {
+        List<int> list = new List<int>();
+
+        bool thereIsANeighborUPHere = false;
+        bool thereIsANeighborOnRight = false;
+        bool thereIsANeighborDownHere = false;
+        bool thereIsANeighborOnleft = false;
+
+        // neighbor UP
+        if( _i % m_height == 0 )
+        {
+            thereIsANeighborUPHere = false;
+            thereIsANeighborOnRight = (_i + m_height)<m_length;
+            thereIsANeighborDownHere = (_i + 1) % m_height > 0 && (_i+1)<m_length;
+            thereIsANeighborOnleft = (_i - m_height)>=0;
+        }
+        else
+        {
+            thereIsANeighborUPHere = (_i - 1) % m_height >= 0 && (_i-1)>=0;
+            thereIsANeighborOnRight = (_i + m_height)<m_length;
+            thereIsANeighborDownHere = (_i + 1) % m_height > 0 && (_i+1)<m_length;
+            thereIsANeighborOnleft = (_i - m_height)>=0;
+        }
+       
+
+        if( thereIsANeighborUPHere )
+        {
+            list.Add( _i - 1 );
+        }
+        if( thereIsANeighborOnRight )
+        {
+            list.Add( _i + m_height );
+        }
+        if( thereIsANeighborDownHere )
+        {
+            list.Add( _i + 1 );
+        }
+        if( thereIsANeighborOnleft )
+        {
+            list.Add(_i - m_height); 
+        }
+        return list;
+    }
+
     #endregion
 
     #region Private Members
-
-    private int m_floodingIndex=0;
-    
     private int m_length; 
     private int [] m_map1D;
     private float m_nextStepStartTimer;
@@ -179,5 +257,6 @@ public class FluidPropagation : MonoBehaviour {
     private List<int> m_listOfIndexToFlood = new List<int>();
     private List<int> m_listOfIndexAlreadyFlooded = new List<int>();
     private Dictionary<int, GameObject> m_listOfCubes = new Dictionary<int, GameObject>();
+    
     #endregion
 }
