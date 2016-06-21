@@ -173,6 +173,7 @@ public class FluidPropagation : MonoBehaviour {
                 Cube cubeScript = cube.GetComponent<Cube>();
                 cubeScript.m_meshRenderer.material = m_materialList[ randomValue ];
                 cubeScript.OriginalMaterial = m_materialList[ randomValue ];
+                cubeScript.Weight = randomValue;
                 cube.transform.SetParent( m_transform, false );
                 m_listOfCubes.Add(index, cube);
             }
@@ -181,58 +182,118 @@ public class FluidPropagation : MonoBehaviour {
 
     private void UpdateMap()
     {
-        bool isFlooding = m_listOfIndexToFlood.Count > 0;
+        m_isProcessing = m_listOfIndexToFlood.Count > 0;
 
-        if (isFlooding)
+        if ( m_isProcessing )
         {
-            int currentIndex = m_listOfIndexToFlood[0];
+            BreathFirstPathFinding();
+            //DijkstraPathFinding();
 
-            bool destinationIsReached = currentIndex == m_destinationIndex;
 
-            if( destinationIsReached )
+
+        }
+       
+    }
+    // TO tweak !
+    private void DijkstraPathFinding()
+    {
+        int currentIndex = m_listOfIndexToFlood[0];
+        
+        bool destinationIsReached = currentIndex == m_destinationIndex;
+
+        if( destinationIsReached )
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
             {
-                GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
-                if( cube )
+                m_isProcessing = false;
+                RetrievePath();
+            }
+        }
+        else
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
+            {
+                Cube cubeScript = cube.GetComponent<Cube>();
+                if( m_floodIsActive )
                 {
-                    isFlooding = false;
-                    RetrievePath();
+                    cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
+                    m_map1D[ currentIndex ] = 1;
+                }
+                else
+                {
+                    cubeScript.m_meshRenderer.material = cubeScript.OriginalMaterial;
                 }
             }
             else
             {
-                GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
-                if( cube )
+                Debug.LogError( "No Cube found" );
+            }
+            m_listOfIndexToFlood.RemoveAt( 0 );
+            m_listOfIndexAlreadyFlooded.Add( currentIndex );
+            GetNeighBours( currentIndex );
+
+            m_listOfIndexToFlood.Sort(SortByWeight);
+
+            if( m_listOfIndexToFlood.Count > 0 )
+            {
+                GameObject nextCube = FindObjectInDictionary(m_listOfIndexToFlood[0], m_listOfCubes);
+                nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 3 ];
+
+            }
+        }
+
+    }
+
+    private void BreathFirstPathFinding()
+    {
+        int currentIndex = m_listOfIndexToFlood[0];
+
+        bool destinationIsReached = currentIndex == m_destinationIndex;
+
+        if( destinationIsReached )
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
+            {
+                m_isProcessing = false;
+                RetrievePath();
+            }
+        }
+        else
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
+            {
+                Cube cubeScript = cube.GetComponent<Cube>();
+                if( m_floodIsActive )
                 {
-                    Cube cubeScript = cube.GetComponent<Cube>();
-                    if( m_floodIsActive )
-                    {
-                        cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
-                        m_map1D[ currentIndex ] = 1;
-                    }else
-                    {
-                        cubeScript.m_meshRenderer.material = cubeScript.OriginalMaterial;
-                    }                    
+                    cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
+                    m_map1D[ currentIndex ] = 1;
                 }
                 else
                 {
-                    Debug.LogError( "No Cube found" );
-                }
-                m_listOfIndexToFlood.RemoveAt( 0 );
-                m_listOfIndexAlreadyFlooded.Add( currentIndex );
-                GetNeighBours( currentIndex );
-
-
-                if( m_listOfIndexToFlood.Count > 0 )
-                {
-                    GameObject nextCube = FindObjectInDictionary(m_listOfIndexToFlood[0], m_listOfCubes);
-                    nextCube.GetComponent<MeshRenderer>().material = m_materialList[3];
-
+                    cubeScript.m_meshRenderer.material = cubeScript.OriginalMaterial;
                 }
             }
-            
+            else
+            {
+                Debug.LogError( "No Cube found" );
+            }
+            m_listOfIndexToFlood.RemoveAt( 0 );
+            m_listOfIndexAlreadyFlooded.Add( currentIndex );
+            GetNeighBours( currentIndex );
 
+            m_listOfIndexToFlood.Sort();
+
+            if( m_listOfIndexToFlood.Count > 0 )
+            {
+                GameObject nextCube = FindObjectInDictionary(m_listOfIndexToFlood[0], m_listOfCubes);
+                nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 3 ];
+
+            }
         }
-       
     }
     /// <summary>
     /// This methods add the available neighbors of an index to the m_listOfIndexToFlood list
@@ -373,7 +434,10 @@ public class FluidPropagation : MonoBehaviour {
 
         DrawPath();
     }
-
+    private int SortByWeight(int a, int b)
+    {
+        return b - a;
+    }
     private void DrawPath()
     {
         for (int i = m_PathSteps.Count-1; i > 0; i-- )
@@ -388,6 +452,7 @@ public class FluidPropagation : MonoBehaviour {
     private int m_length;
     private int m_destinationIndex;
     private int [] m_map1D;
+    private bool m_isProcessing;
    // private int [,] m_map2D;
     private float m_nextStepStartTimer;
     private Transform m_transform;
