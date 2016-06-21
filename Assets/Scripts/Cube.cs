@@ -5,13 +5,31 @@ using System.Collections.Generic;
 public class Cube : MonoBehaviour {
 
     #region Public And Protected Members
-        
+
+    public Material OriginalMaterial
+    {
+        get { return m_originalMaterial; }
+        set { m_originalMaterial = value; }
+    }
+    public int Weight
+    {
+        get { return m_weight; }
+        set { m_weight = value; }
+    }
+    [HideInInspector]
+    public MeshRenderer m_meshRenderer;
+
     #endregion
 
     #region Main Methods
-    void Start()
+    void Awake()
     {
         m_meshRenderer = GetComponent<MeshRenderer>();
+    }
+
+    void Start()
+    {
+        
     }
 
     // Update is called once per frame
@@ -37,11 +55,10 @@ public class Cube : MonoBehaviour {
 
     #region Private Members
 
-    private Vector2 m_positionInGrid;
-    private List<Material> m_listOfMaterial;
-    private MeshRenderer m_meshRenderer;
-    private FluidPropagation m_map;
+    private int m_weight; 
+    private Material m_originalMaterial;
     private int m_origin;
+
     #endregion
 
 }

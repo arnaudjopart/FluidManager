@@ -28,7 +28,6 @@ public class FluidPropagation : MonoBehaviour {
 
     void Start()
     {
-        
         CreateMap();        
     }
 
@@ -57,6 +56,17 @@ public class FluidPropagation : MonoBehaviour {
     /// </summary>
     private void ManageInput()
     {
+        var d = Input.GetAxis("Mouse ScrollWheel");
+        if( d > 0f )
+        {
+            // scroll up
+            Camera.main.orthographicSize += .5f; 
+        }
+        else if( d < 0f )
+        {
+            // scroll down
+            Camera.main.orthographicSize -= .5f;
+        }
         if( Input.GetMouseButtonDown( 0 ) )
         {
             if( m_floodIsActive )
@@ -83,7 +93,10 @@ public class FluidPropagation : MonoBehaviour {
                         int number = int.Parse(name);
                         m_PathOriginAndDestination.Add( number );
                         GameObject cube = FindObjectInDictionary(number, m_listOfCubes);
-                        cube.GetComponent<MeshRenderer>().material = m_materialList[ 4 ];
+                        
+                        cube.GetComponent<Cube>().OriginalMaterial = cube.GetComponent<Cube>().m_meshRenderer.material;
+                        cube.GetComponent<Cube>().m_meshRenderer.material = m_materialList[ 4 ];
+                        
 
                     }
                     
@@ -107,7 +120,6 @@ public class FluidPropagation : MonoBehaviour {
             CreateMap();
         }
     }
-
     private void ClearMap()
     {
         m_listOfIndexToFlood = new List<int>();
@@ -125,14 +137,24 @@ public class FluidPropagation : MonoBehaviour {
     
     private void ClearPath()
     {
+        while( m_PathOriginAndDestination.Count > 0 )
+        {
+            GameObject cube = FindObjectInDictionary(m_PathOriginAndDestination[0],m_listOfCubes);
+            cube.GetComponent<Cube>().m_meshRenderer.material = cube.GetComponent<Cube>().OriginalMaterial;
+            m_PathOriginAndDestination.RemoveAt( 0 );
+        }
+            
         m_PathOriginAndDestination = new List<int>();
     }
 
     private void CreateMap()
     {
-        ClearMap();
         ClearPath();
+        ClearMap();
+                
         m_length = m_width * m_height;
+
+        //m_map2D = new int[ m_width, m_height ];
         m_map1D = new int[ m_length ];
 
         for( int x = 0; x < m_width; x++ )
@@ -148,7 +170,9 @@ public class FluidPropagation : MonoBehaviour {
 
                 GameObject cube = Instantiate(m_cubePrefab, positionOfCube, Quaternion.identity) as GameObject;
                 cube.name = index.ToString();
-                cube.GetComponent<MeshRenderer>().material = m_materialList[ randomValue ];
+                Cube cubeScript = cube.GetComponent<Cube>();
+                cubeScript.m_meshRenderer.material = m_materialList[ randomValue ];
+                cubeScript.OriginalMaterial = m_materialList[ randomValue ];
                 cube.transform.SetParent( m_transform, false );
                 m_listOfCubes.Add(index, cube);
             }
@@ -170,8 +194,6 @@ public class FluidPropagation : MonoBehaviour {
                 GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
                 if( cube )
                 {
-                    cube.GetComponent<MeshRenderer>().material = m_materialList[ 1 ];
-                    m_map1D[ currentIndex ] = 1;
                     isFlooding = false;
                     RetrievePath();
                 }
@@ -181,8 +203,15 @@ public class FluidPropagation : MonoBehaviour {
                 GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
                 if( cube )
                 {
-                    cube.GetComponent<MeshRenderer>().material = m_materialList[ 1 ];
-                    m_map1D[ currentIndex ] = 1;
+                    Cube cubeScript = cube.GetComponent<Cube>();
+                    if( m_floodIsActive )
+                    {
+                        cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
+                        m_map1D[ currentIndex ] = 1;
+                    }else
+                    {
+                        cubeScript.m_meshRenderer.material = cubeScript.OriginalMaterial;
+                    }                    
                 }
                 else
                 {
@@ -359,6 +388,7 @@ public class FluidPropagation : MonoBehaviour {
     private int m_length;
     private int m_destinationIndex;
     private int [] m_map1D;
+   // private int [,] m_map2D;
     private float m_nextStepStartTimer;
     private Transform m_transform;
     private List<int> m_listOfIndexToFlood = new List<int>();
