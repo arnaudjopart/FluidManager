@@ -16,7 +16,7 @@ public class FluidPropagation : MonoBehaviour {
     public GameObject m_cubePrefab;
     public List<Material> m_materialList;
 
-    public bool m_floodIsActive;
+    public bool m_activePathFinding;
     #endregion
 
     #region Main Methods
@@ -69,7 +69,7 @@ public class FluidPropagation : MonoBehaviour {
         }
         if( Input.GetMouseButtonDown( 0 ) )
         {
-            if( m_floodIsActive )
+            if( !m_activePathFinding )
             {
                 Vector3 mousePosition = Input.mousePosition;
                 mousePosition = Camera.main.ScreenToWorldPoint( mousePosition );
@@ -216,7 +216,7 @@ public class FluidPropagation : MonoBehaviour {
             if( cube )
             {
                 Cube cubeScript = cube.GetComponent<Cube>();
-                if( m_floodIsActive )
+                if( !m_activePathFinding )
                 {
                     cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
                     m_map1D[ currentIndex ] = 1;
@@ -252,7 +252,7 @@ public class FluidPropagation : MonoBehaviour {
 
         bool destinationIsReached = currentIndex == m_destinationIndex;
 
-        if( destinationIsReached )
+        if( m_activePathFinding && destinationIsReached )
         {
             GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
             if( cube )
@@ -267,7 +267,7 @@ public class FluidPropagation : MonoBehaviour {
             if( cube )
             {
                 Cube cubeScript = cube.GetComponent<Cube>();
-                if( m_floodIsActive )
+                if( !m_activePathFinding )
                 {
                     cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
                     m_map1D[ currentIndex ] = 1;
@@ -285,7 +285,7 @@ public class FluidPropagation : MonoBehaviour {
             m_listOfIndexAlreadyFlooded.Add( currentIndex );
             GetNeighBoursInBreathFirstPathFinding( currentIndex );
 
-            m_listOfIndexToFlood.Sort();
+            
 
             if( m_listOfIndexToFlood.Count > 0 )
             {
@@ -302,6 +302,10 @@ public class FluidPropagation : MonoBehaviour {
     private void GetNeighBoursInBreathFirstPathFinding(int _index)
     {
         List<int> neigborsIndexList = GenerateNeighbors(_index);
+        if( _index == 0 )
+        {
+            print( neigborsIndexList );
+        }
         int origin = _index;
         foreach (int index in neigborsIndexList )
         {
