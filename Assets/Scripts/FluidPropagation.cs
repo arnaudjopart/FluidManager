@@ -15,8 +15,8 @@ public class FluidPropagation : MonoBehaviour {
     public int[] listOfStartFlood;
     public GameObject m_cubePrefab;
     public List<Material> m_materialList;
-    
 
+    public bool m_activePathFinding;
     #endregion
 
     #region Main Methods
@@ -28,45 +28,21 @@ public class FluidPropagation : MonoBehaviour {
 
     void Start()
     {
-        
         CreateMap();        
     }
 
     void Update()
     {
 
-        if (Input.GetMouseButtonDown(0))
-        {
-            Vector3 mousePosition = Input.mousePosition;
-            
-            mousePosition = Camera.main.ScreenToWorldPoint(mousePosition);
-            RaycastHit hit;
-            if (Physics.Raycast(mousePosition, Vector3.forward*11, out hit))
-            {
-                string name = hit.collider.gameObject.name;
-                int number = int.Parse(name);
-                //print(number);
-                m_listOfIndexToFlood.Add(number);
-
-            }
-            
-
-        }
-        if( Input.GetMouseButtonDown( 1 ) )
-        {
-            CreateMap();
-        }
+        ManageInput();
+        
         bool isAllowedToGoNextStep = Time.time > m_nextStepStartTimer+m_timeBetweenSteps;
         if( m_isFillingAuto && isAllowedToGoNextStep )
         {
             m_nextStepStartTimer = Time.time;
             UpdateMap();
         }
-        else
-        {
-
-        }
-    }
+    }   
 
     public void StartPropagation(Vector2 _positionOfStart)
     {
@@ -75,7 +51,75 @@ public class FluidPropagation : MonoBehaviour {
     #endregion
 
     #region Utils
+    /// <summary>
+    /// Manage the input controls
+    /// </summary>
+    private void ManageInput()
+    {
+        var d = Input.GetAxis("Mouse ScrollWheel");
+        if( d > 0f )
+        {
+            // scroll up
+            Camera.main.orthographicSize += .5f; 
+        }
+        else if( d < 0f )
+        {
+            // scroll down
+            Camera.main.orthographicSize -= .5f;
+        }
+        if( Input.GetMouseButtonDown( 0 ) )
+        {
+            if( !m_activePathFinding )
+            {
+                Vector3 mousePosition = Input.mousePosition;
+                mousePosition = Camera.main.ScreenToWorldPoint( mousePosition );
+                RaycastHit hit;
+                if( Physics.Raycast( mousePosition, Vector3.forward * 11, out hit ) )
+                {
+                    string name = hit.collider.gameObject.name;
+                    int number = int.Parse(name);
+                    m_listOfIndexToFlood.Add( number );
+                }
+            }else
+            {
+                if( m_PathOriginAndDestination.Count < 2 )
+                {
+                    Vector3 mousePosition = Input.mousePosition;
+                    mousePosition = Camera.main.ScreenToWorldPoint( mousePosition );
+                    RaycastHit hit;
+                    if( Physics.Raycast( mousePosition, Vector3.forward * 11, out hit ) )
+                    {
+                        string name = hit.collider.gameObject.name;
+                        int number = int.Parse(name);
+                        m_PathOriginAndDestination.Add( number );
+                        GameObject cube = FindObjectInDictionary(number, m_listOfCubes);
+                        
+                        cube.GetComponent<Cube>().OriginalMaterial = cube.GetComponent<Cube>().m_meshRenderer.material;
+                        cube.GetComponent<Cube>().m_meshRenderer.material = m_materialList[ 4 ];
+                        
 
+                    }
+                    
+                }
+                if( m_PathOriginAndDestination.Count == 2 )
+                {
+                    m_destinationIndex = m_PathOriginAndDestination[ 1 ];
+                    m_listOfIndexToFlood.Add( m_PathOriginAndDestination[0] );
+                    
+                }
+            }
+            
+
+        }
+        if( Input.GetMouseButtonDown( 1 ) )
+        {
+            ClearPath();
+        }
+        if( Input.GetKeyDown( KeyCode.Space ) )
+        {
+            CreateMap();
+        }
+    }
     private void ClearMap()
     {
         m_listOfIndexToFlood = new List<int>();
@@ -87,12 +131,30 @@ public class FluidPropagation : MonoBehaviour {
             GameObject.Destroy( obj.gameObject );
         }
     }
+    /// <summary>
+    /// This method creates the map
+    /// </summary>
+    
+    private void ClearPath()
+    {
+        while( m_PathOriginAndDestination.Count > 0 )
+        {
+            GameObject cube = FindObjectInDictionary(m_PathOriginAndDestination[0],m_listOfCubes);
+            cube.GetComponent<Cube>().m_meshRenderer.material = cube.GetComponent<Cube>().OriginalMaterial;
+            m_PathOriginAndDestination.RemoveAt( 0 );
+        }
+            
+        m_PathOriginAndDestination = new List<int>();
+    }
 
     private void CreateMap()
     {
+        ClearPath();
         ClearMap();
-
+                
         m_length = m_width * m_height;
+
+        //m_map2D = new int[ m_width, m_height ];
         m_map1D = new int[ m_length ];
 
         for( int x = 0; x < m_width; x++ )
@@ -108,7 +170,10 @@ public class FluidPropagation : MonoBehaviour {
 
                 GameObject cube = Instantiate(m_cubePrefab, positionOfCube, Quaternion.identity) as GameObject;
                 cube.name = index.ToString();
-                cube.GetComponent<MeshRenderer>().material = m_materialList[ randomValue ];
+                Cube cubeScript = cube.GetComponent<Cube>();
+                cubeScript.m_meshRenderer.material = m_materialList[ randomValue ];
+                cubeScript.OriginalMaterial = m_materialList[ randomValue ];
+                cubeScript.Cost = randomValue+1;
                 cube.transform.SetParent( m_transform, false );
                 m_listOfCubes.Add(index, cube);
             }
@@ -117,73 +182,205 @@ public class FluidPropagation : MonoBehaviour {
 
     private void UpdateMap()
     {
-        bool isFlooding = m_listOfIndexToFlood.Count > 0;
+        m_isProcessing = m_listOfIndexToFlood.Count > 0;
 
-        if (isFlooding)
+        if ( m_isProcessing )
         {
-            int currentIndex = m_listOfIndexToFlood[0];
-            //print("check "+currentIndex);
-            
-            GameObject cube;
+            BreathFirstPathFinding();
+            //DijkstraPathFinding();
 
-            if (m_listOfCubes.TryGetValue(currentIndex, out cube))
+
+
+        }
+       
+    }
+    // TO tweak !
+    private void DijkstraPathFinding()
+    {
+        int currentIndex = m_listOfIndexToFlood[0];
+        
+        bool destinationIsReached = currentIndex == m_destinationIndex;
+
+        if( destinationIsReached )
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
             {
-                cube.GetComponent<MeshRenderer>().material = m_materialList[1];
-                m_map1D[ currentIndex ] = 1;
-            }else
+                m_isProcessing = false;
+                RetrievePath();
+            }
+        }
+        else
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
+            {
+                Cube cubeScript = cube.GetComponent<Cube>();
+                if( !m_activePathFinding )
+                {
+                    cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
+                    m_map1D[ currentIndex ] = 1;
+                }
+                else
+                {
+                    cubeScript.m_meshRenderer.material = cubeScript.OriginalMaterial;
+                }
+            }
+            else
             {
                 Debug.LogError( "No Cube found" );
             }
             m_listOfIndexToFlood.RemoveAt( 0 );
             m_listOfIndexAlreadyFlooded.Add( currentIndex );
-            GetNeighBours( currentIndex );
+            GetNeighBoursInBreathFirstPathFinding( currentIndex );
 
+            m_listOfIndexToFlood.Sort(SortByWeight);
 
             if( m_listOfIndexToFlood.Count > 0 )
             {
-                GameObject nextCube;
+                GameObject nextCube = FindObjectInDictionary(m_listOfIndexToFlood[0], m_listOfCubes);
+                nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 3 ];
 
-                if( m_listOfCubes.TryGetValue( m_listOfIndexToFlood[ 0 ], out nextCube ) )
-                {
-                    nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 3 ];
-                }
-            } 
-
+            }
         }
-       
+
     }
 
-    private void GetNeighBours(int _index)
+    private void BreathFirstPathFinding()
+    {
+        int currentIndex = m_listOfIndexToFlood[0];
+
+        bool destinationIsReached = currentIndex == m_destinationIndex;
+
+        if( m_activePathFinding && destinationIsReached )
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
+            {
+                m_isProcessing = false;
+                RetrievePath();
+            }
+        }
+        else
+        {
+            GameObject cube = FindObjectInDictionary(currentIndex, m_listOfCubes);
+            if( cube )
+            {
+                Cube cubeScript = cube.GetComponent<Cube>();
+                if( !m_activePathFinding )
+                {
+                    cubeScript.m_meshRenderer.material = m_materialList[ 1 ];
+                    m_map1D[ currentIndex ] = 1;
+                }
+                else
+                {
+                    cubeScript.m_meshRenderer.material = cubeScript.OriginalMaterial;
+                }
+            }
+            else
+            {
+                Debug.LogError( "No Cube found" );
+            }
+            m_listOfIndexToFlood.RemoveAt( 0 );
+            m_listOfIndexAlreadyFlooded.Add( currentIndex );
+            GetNeighBoursInBreathFirstPathFinding( currentIndex );
+
+            
+
+            if( m_listOfIndexToFlood.Count > 0 )
+            {
+                GameObject nextCube = FindObjectInDictionary(m_listOfIndexToFlood[0], m_listOfCubes);
+                nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 3 ];
+
+            }
+        }
+    }
+    /// <summary>
+    /// This methods add the available neighbors of an index to the m_listOfIndexToFlood list
+    /// </summary>
+    /// <param name="_index"></param>
+    private void GetNeighBoursInBreathFirstPathFinding(int _index)
     {
         List<int> neigborsIndexList = GenerateNeighbors(_index);
-
+        if( _index == 0 )
+        {
+            print( neigborsIndexList );
+        }
+        int origin = _index;
         foreach (int index in neigborsIndexList )
         {
-            
-            bool isRock = m_map1D[ index ] ==2;
+            bool isRock = m_map1D[ index ] == 2;
 
             if( !isRock )
             {
-                //print( "test" );
                 bool isAlreadyFlooded = CheckIfIndexIsInList(index,m_listOfIndexAlreadyFlooded);
                 bool isAlreadyWaitingForCheck = CheckIfIndexIsInList(index,m_listOfIndexToFlood);
 
                 if( !isAlreadyFlooded && !isAlreadyWaitingForCheck )
                 {
                     m_listOfIndexToFlood.Add( index );
-                    //print( "add " + index );
-                    GameObject nextCube;
 
-                    if( m_listOfCubes.TryGetValue( index, out nextCube ) )
-                    {
-                        nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 4 ];
-                    }
+                    GameObject nextCube = FindObjectInDictionary(index, m_listOfCubes);
+                    nextCube.GetComponent<MeshRenderer>().material = m_materialList[ 4 ];
+                    nextCube.GetComponent<Cube>().SetOrigin(origin);
                 }
             }             
-
         }
     }
 
+    private void GetNeighBoursInDijkstraPathFinding(int _index)
+    {
+        GameObject currentCube = FindObjectInDictionary(_index, m_listOfCubes);
+        List<int> neigborsIndexList = GenerateNeighbors(_index);
+        int origin = _index;
+        int costSoFar = currentCube.GetComponent<Cube>().CostSoFar;
+        foreach (int index in neigborsIndexList)
+        {
+            bool isRock = m_map1D[index] == 2;
+
+            if (!isRock)
+            {
+                GameObject nextCube = FindObjectInDictionary(index, m_listOfCubes);
+                int newCostSoFar = costSoFar + nextCube.GetComponent<Cube>().Cost;
+
+                bool isAlreadyChecked = CheckIfIndexIsInList(index, m_listOfIndexAlreadyFlooded);
+                bool isAlreadyWaitingForCheck = CheckIfIndexIsInList(index, m_listOfIndexToFlood);
+                bool newCostIsBeter = newCostSoFar< nextCube.GetComponent<Cube>().CostSoFar;
+
+                if (!isAlreadyChecked || !isAlreadyWaitingForCheck)
+                {
+
+                    m_listOfIndexToFlood.Add(index);
+                    
+                    nextCube.GetComponent<MeshRenderer>().material = m_materialList[4];
+                    nextCube.GetComponent<Cube>().SetOrigin(origin);
+                }
+            }
+        }
+    }
+    /// <summary>
+    /// this method search for a specific index in a dictionary and return a gameobject
+    /// </summary>
+    /// <param name="_index"></param>
+    /// <param name="_dictionary"></param>
+    /// <returns></returns>
+    private GameObject FindObjectInDictionary(int _index, Dictionary<int,GameObject> _dictionary)
+    {
+        GameObject nextCube;
+
+        if( _dictionary.TryGetValue( _index, out nextCube ) )
+        {
+            return nextCube;
+        }
+
+        return null;
+    }
+    /// <summary>
+    /// this method checks if en index appears in a list
+    /// </summary>
+    /// <param name="_index"></param>
+    /// <param name="_list"></param>
+    /// <returns></returns>
     private bool CheckIfIndexIsInList(int _index, List<int> _list)
     {
         bool isInList=false;
@@ -202,6 +399,11 @@ public class FluidPropagation : MonoBehaviour {
         }
         return isInList;
     }
+    /// <summary>
+    /// This method generate a list of the neghbors indexes.
+    /// </summary>
+    /// <param name="_i"></param>
+    /// <returns></returns>
     private List<int> GenerateNeighbors(int _i)
     {
         List<int> list = new List<int>();
@@ -211,7 +413,6 @@ public class FluidPropagation : MonoBehaviour {
         bool thereIsANeighborDownHere = false;
         bool thereIsANeighborOnleft = false;
 
-        // neighbor UP
         if( _i % m_height == 0 )
         {
             thereIsANeighborUPHere = false;
@@ -225,8 +426,7 @@ public class FluidPropagation : MonoBehaviour {
             thereIsANeighborOnRight = (_i + m_height)<m_length;
             thereIsANeighborDownHere = (_i + 1) % m_height > 0 && (_i+1)<m_length;
             thereIsANeighborOnleft = (_i - m_height)>=0;
-        }
-       
+        }       
 
         if( thereIsANeighborUPHere )
         {
@@ -246,17 +446,59 @@ public class FluidPropagation : MonoBehaviour {
         }
         return list;
     }
+    private void RetrievePath()
+    {
+        m_PathSteps = new List<GameObject>();
+        int security = 0;
 
+        GameObject cube = FindObjectInDictionary(m_destinationIndex,m_listOfCubes);
+        m_PathSteps.Add( cube );
+        while( cube.GetComponent<Cube>().GetOrigin() !=0 )
+        {
+            int indexOfOrigin = cube.GetComponent<Cube>().GetOrigin();
+            m_PathSteps.Add( cube );
+            cube = FindObjectInDictionary( indexOfOrigin, m_listOfCubes );
+            security++;
+            if(security>1000)
+            {
+                print( "security out" );
+                break;
+            }
+        }
+        print( "Found Path" );
+        m_PathSteps.Add( FindObjectInDictionary( m_PathOriginAndDestination[ 0 ],m_listOfCubes ) );
+
+        DrawPath();
+    }
+    private int SortByWeight(int _a, int _b)
+    {
+        int a = FindObjectInDictionary(_a, m_listOfCubes).GetComponent<Cube>().CostSoFar;
+        int b = FindObjectInDictionary(_b, m_listOfCubes).GetComponent<Cube>().CostSoFar;
+
+        return b - a;
+    }
+    private void DrawPath()
+    {
+        for (int i = m_PathSteps.Count-1; i > 0; i-- )
+        {
+            m_PathSteps[ i ].GetComponent<MeshRenderer>().material = m_materialList[ 3 ];
+        }
+    }
     #endregion
 
     #region Private Members
-    private int m_length; 
+
+    private int m_length;
+    private int m_destinationIndex;
     private int [] m_map1D;
+    private bool m_isProcessing;
+   // private int [,] m_map2D;
     private float m_nextStepStartTimer;
     private Transform m_transform;
     private List<int> m_listOfIndexToFlood = new List<int>();
     private List<int> m_listOfIndexAlreadyFlooded = new List<int>();
     private Dictionary<int, GameObject> m_listOfCubes = new Dictionary<int, GameObject>();
-    
+    private List<GameObject> m_PathSteps = new List<GameObject>();
+    private List<int> m_PathOriginAndDestination = new List<int>();
     #endregion
 }

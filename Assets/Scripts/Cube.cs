@@ -5,13 +5,37 @@ using System.Collections.Generic;
 public class Cube : MonoBehaviour {
 
     #region Public And Protected Members
-    public Material m_waterMaterial;
+
+    public Material OriginalMaterial
+    {
+        get { return m_originalMaterial; }
+        set { m_originalMaterial = value; }
+    }
+    public int Cost
+    {
+        get { return m_cost; }
+        set { m_cost = value; }
+
+    }
+    public int CostSoFar
+    {
+        get { return m_costSoFar; }
+        set { m_costSoFar = value; }
+    }
+    [HideInInspector]
+    public MeshRenderer m_meshRenderer;
+
     #endregion
 
     #region Main Methods
-    void Start()
+    void Awake()
     {
         m_meshRenderer = GetComponent<MeshRenderer>();
+    }
+
+    void Start()
+    {
+        
     }
 
     // Update is called once per frame
@@ -20,22 +44,13 @@ public class Cube : MonoBehaviour {
 
     }
 
-    void OnMouseDown()
+    public void SetOrigin(int _origin)
     {
-        ChangeToWater();
+        m_origin = _origin;
     }
-    public void Initialise(List<Material> _listOfAvailableMaterials,FluidPropagation _map, int _x, int _y)
+    public int GetOrigin()
     {
-        m_listOfMaterial = _listOfAvailableMaterials;
-        m_map = _map;
-        m_positionInGrid = new Vector2( _x, _y );
-    }
-
-    public void ChangeToWater()
-    {
-        m_meshRenderer.material = m_listOfMaterial[ 1 ];
-        m_map.StartPropagation( m_positionInGrid );
-
+        return m_origin;
     }
     #endregion
 
@@ -46,11 +61,11 @@ public class Cube : MonoBehaviour {
 
     #region Private Members
 
-    private Vector2 m_positionInGrid;
-    private int m_indexInList;
-    private List<Material> m_listOfMaterial;
-    private MeshRenderer m_meshRenderer;
-    private FluidPropagation m_map;
+    private int m_cost;
+    private int m_costSoFar = 0;
+    private Material m_originalMaterial;
+    private int m_origin;
+
     #endregion
 
 }
